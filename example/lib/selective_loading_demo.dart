@@ -8,9 +8,9 @@ import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
 void main() {
   print('=== Selective Metadata Loading Demo ===\n');
 
-  // CONFIGURE BEFORE ANY PARSING
-  print('Step 1: Configure (disable formatting metadata)');
-  LazyMetadataLoader.instance.configure(
+  // INITIALIZE WITH FORMATS DISABLED
+  print('Step 1: Initialize (disable formatting metadata)');
+  LazyMetadataLoader.instance.initialize(
     enableFormats: false, // We don't need phone.formatNsn()
   );
   print('  ✓ Formats map cleared (~200KB saved immediately)');
@@ -50,17 +50,17 @@ void main() {
   print('  Cached entries: ${afterWarmup["total"]}');
   print('  Memory: ~340KB (formats already cleared)\n');
 
-  // OPTIMIZE: Purge unused countries
-  print('Step 3: Optimize (purge unused countries)');
-  LazyMetadataLoader.instance.optimize();
+  // PURGE: Remove unused countries
+  print('Step 3: Purge (remove unused countries)');
+  LazyMetadataLoader.instance.purge();
 
-  final afterOptimize = LazyMetadataLoader.instance.getCacheStats();
-  print('  ✓ Optimization complete');
-  print('  Accessed countries: ${afterOptimize["accessed"]}');
-  print('  Cached entries: ${afterOptimize["total"]}');
-  print('  Optimized: ${afterOptimize["optimized"]}\n');
+  final afterPurge = LazyMetadataLoader.instance.getCacheStats();
+  print('  ✓ Purge complete');
+  print('  Accessed countries: ${afterPurge["accessed"]}');
+  print('  Cached entries: ${afterPurge["total"]}');
+  print('  Purged: ${afterPurge["purged"]}\n');
 
-  // VERIFY: Still works after optimization
+  // VERIFY: Still works after purge
   print('Step 4: Verification');
   final verifyPhone = PhoneNumber.parse('+13105551234'); // Another US number
   print('  Parse: ${verifyPhone.international}');
@@ -68,16 +68,16 @@ void main() {
 
   // CALCULATE SAVINGS
   print('=== Memory Savings Summary ===');
-  print('Without optimization:');
+  print('Without purging:');
   print('  All countries: 245 × 4 maps = 980 entries (~540KB)');
   print('');
-  print('With configure(enableFormats: false):');
+  print('With initialize(enableFormats: false):');
   print('  All countries: 245 × 3 maps = 735 entries (~340KB)');
   print('  Immediate savings: ~37%');
   print('');
-  print('With configure + optimize:');
-  final accessed = afterOptimize['accessed'] as int;
-  final total = afterOptimize['total'] as int;
+  print('With initialize + purge:');
+  final accessed = afterPurge['accessed'] as int;
+  final total = afterPurge['total'] as int;
   print('  Used countries: $accessed × 3 maps = $total entries');
 
   final memoryEstimate = (total / 980 * 540).round();

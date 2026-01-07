@@ -9,60 +9,100 @@ import 'models/phone_metadata_formats.dart';
 import 'models/phone_metadata_lengths.dart';
 import 'models/phone_metadata_patterns.dart';
 
-/// Lazy loader for phone metadata with warm-up and purge strategy.
+/// Lazy loader for phone metadata with initialization control and memory optimization.
 ///
-/// This loader provides a way to reduce memory footprint by purging unused
-/// country metadata after a warm-up period. Initially, all 245 countries
-/// (~540KB) are loaded in memory. After calling [optimize()], only the
-/// countries accessed during warm-up remain, reducing memory by up to 87%.
+/// This loader provides multiple strategies to reduce memory footprint:
+///
+/// ## 1. Lazy Loading (Automatic)
+/// Metadata maps use `late final` and aren't loaded until first use, saving
+/// ~50-100ms at app launch. Call [initialize()] to control when loading happens.
+///
+/// ## 2. Selective Loading
+/// Disable formatting metadata when you only need parsing/validation:
+/// ```dart
+/// LazyMetadataLoader.instance.initialize(enableFormats: false);
+/// // Saves ~200KB (~37% of total metadata)
+/// ```
+///
+/// ## 3. Warm-up and Purge
+/// After warming up with countries you need, call [purge()] to remove unused
+/// countries, reducing memory by up to 87%.
 ///
 /// ## Usage Patterns
 ///
-/// ### Pattern 1: Known Countries (Memory Optimization)
-/// If your app only works with specific countries, use optimize():
+/// ### Pattern 1: Default (Auto Lazy Loading)
 /// ```dart
-/// // Warm-up: Parse phone numbers from countries you'll use
-/// PhoneNumber.parse('+14155552671'); // US
-/// PhoneNumber.parse('+33612345678'); // FR
-/// PhoneNumber.parse('+441234567890'); // GB
-///
-/// // Optimize: Purge unused countries (saves ~87% memory)
-/// LazyMetadataLoader.instance.optimize();
-///
-/// // Continue using: Only US, FR, GB remain available
-/// PhoneNumber.parse('+13105551234'); // Works! (US was in warm-up)
-/// PhoneNumber.parse('+81312345678'); // Fails! (JP not in warm-up)
+/// // Do nothing - maps load on first parse (~50-100ms delay once)
+/// PhoneNumber.parse('+14155552671'); // First call loads all maps
+/// PhoneNumber.parse('+33612345678'); // Instant (already loaded)
 /// ```
 ///
-/// ### Pattern 2: Dynamic Countries (Keep Flexibility)
-/// If your app needs to parse any country at any time, don't call optimize():
+/// ### Pattern 2: Eager Initialization
 /// ```dart
-/// // Parse any country without warm-up or optimization
-/// PhoneNumber.parse('+14155552671'); // Works
-/// PhoneNumber.parse('+81312345678'); // Works
-/// PhoneNumber.parse('+5511987654321'); // Works
-/// // All 245 countries remain available
+/// void main() {
+///   // Load all maps upfront (avoids delay on first parse)
+///   LazyMetadataLoader.instance.initialize();
+///   runApp(MyApp());
+/// }
 /// ```
+///
+/// ### Pattern 3: Smart Initialization (Recommended)
+/// ```dart
+/// class PhoneInputScreen extends StatefulWidget {
+///   @override
+///   void initState() {
+///     super.initState();
+///     // Load during screen animation (user doesn't notice delay)
+///     LazyMetadataLoader.instance.initialize();
+///   }
+/// }
+/// ```
+///
+/// ### Pattern 4: Validation Only (Maximum Savings)
+/// ```dart
+/// void main() {
+///   // Don't load formats (37% immediate savings)
+///   LazyMetadataLoader.instance.initialize(enableFormats: false);
+///   
+///   // Parse and validate works
+///   final phone = PhoneNumber.parse('+14155552671');
+///   phone.isValid(type: PhoneNumberType.mobile); // ✓ Works
+///   phone.formatNsn(); // ✗ Throws (formats not loaded)
+/// }
+/// ```
+///
+/// ### Pattern 5: Memory Optimization (90-93% Savings)
+/// ```dart
+/// void main() {
+///   // 1. Initialize without formats
+///   LazyMetadataLoader.instance.initialize(enableFormats: false);
+///   
+///   // 2. Warm-up: Use the countries you need
+///   PhoneNumber.parse('+14155552671'); // US
+///   PhoneNumber.parse('+33612345678'); // FR
+///   
+///   // 3. Purge: Keep only US & FR
+///   LazyMetadataLoader.instance.purge();
+///   
+///   // Result: ~50KB instead of ~540KB (90-93% savings!)
+///   // Only US & FR can be parsed now
+/// }
+/// ```
+///
+/// ## Memory Impact
+///
+/// - **Default**: ~540KB (245 countries × 4 maps)
+/// - **Without formats**: ~340KB (37% savings)
+/// - **After purge()**: ~65KB for 30 countries (87% savings)
+/// - **Combined**: ~50KB for 30 countries (90-93% savings)
 ///
 /// ## Important Notes
 ///
-/// - After [optimize()], only countries accessed during warm-up are available
-/// - Attempting to parse new countries after optimization will fail
-/// - The optimization persists for the app session (even through background/foreground)
-/// - Full restart of the app reloads all countries
-/// - Natural app lifecycle (OS killing backgrounded apps) automatically resets to full data
-///
-/// ## When to Call optimize()
-///
-/// Good use cases:
-/// - Apps that only handle specific regions (e.g., US-only app)
-/// - After initial user setup (selected their countries)
-/// - When you know which countries will be used for the session
-///
-/// Don't call optimize() if:
-/// - Users can parse any country at any time
-/// - You need maximum flexibility
-/// - Memory is not a concern
+/// - [initialize()] is idempotent - safe to call multiple times
+/// - After [purge()], only warm-up countries remain available
+/// - Optimization persists through app backgrounding
+/// - Full app restart reloads all countries
+/// - Natural app lifecycle (OS killing backgrounded apps) resets to full data
 class LazyMetadataLoader {
   LazyMetadataLoader._();
 
@@ -74,7 +114,7 @@ class LazyMetadataLoader {
   // Track accessed countries during warm-up
   final Set<IsoCode> _accessedCodes = {};
 
-  // Cache maps - populated after optimize()
+  // Cache maps - populated after purge()
   final Map<IsoCode, PhoneMetadata> _metadataCache = {};
   final Map<IsoCode, PhoneMetadataPatterns> _patternsCache = {};
   final Map<IsoCode, PhoneMetadataLengths> _lengthsCache = {};
@@ -82,125 +122,101 @@ class LazyMetadataLoader {
 
   // Configuration flags for selective map loading
   bool _formatsEnabled = true;
-  bool _configured = false;
-  bool _optimized = false;
-  bool _preloaded = false;
+  bool _purged = false;
+  bool _initialized = false;
 
-  /// Preload all metadata maps to avoid lazy initialization delay.
+  /// Initialize all metadata maps to avoid lazy loading delay.
   ///
-  /// This method is idempotent - safe to call multiple times from different
-  /// screens. Only the first call triggers initialization; subsequent calls
-  /// return immediately.
+  /// This method is idempotent - safe to call multiple times from anywhere
+  /// (main, multiple screens, etc). Only the first call triggers initialization;
+  /// subsequent calls return immediately.
   ///
-  /// Call this when entering a screen that will use phone parsing to avoid
-  /// the ~50-100ms delay on first parse. The maps use `late final` so they
-  /// won't be loaded until first access. This method triggers initialization
-  /// early when convenient (e.g., during screen transition animation).
+  /// The maps use `late final` so they won't be loaded until first access.
+  /// Call this method to trigger initialization at a convenient time.
   ///
-  /// ## Example: Preload on Multiple Screens
+  /// ## Parameters
+  /// - [enableFormats]: Whether to load formatting metadata (default: true)
+  ///   Set to false if you only need parsing/validation without formatting.
+  ///   Saves ~200KB (~37% of total metadata).
+  ///
+  /// ## Memory Savings
+  /// - With formats: ~540KB loaded
+  /// - Without formats: ~340KB loaded (37% savings)
+  /// - Combined with purge(): 90-93% total savings
+  ///
+  /// ## Example: Initialize in Main
+  /// ```dart
+  /// void main() {
+  ///   // Initialize everything upfront
+  ///   LazyMetadataLoader.instance.initialize();
+  ///   runApp(MyApp());
+  /// }
+  /// ```
+  ///
+  /// ## Example: Initialize on Screen Navigation
   /// ```dart
   /// class PhoneInputScreen extends StatefulWidget {
   ///   @override
   ///   void initState() {
   ///     super.initState();
-  ///     LazyMetadataLoader.instance.preload(); // First call loads
-  ///   }
-  /// }
-  ///
-  /// class ContactsScreen extends StatefulWidget {
-  ///   @override
-  ///   void initState() {
-  ///     super.initState();
-  ///     LazyMetadataLoader.instance.preload(); // Subsequent calls skip
+  ///     LazyMetadataLoader.instance.initialize(); // During animation
   ///   }
   /// }
   /// ```
   ///
-  /// ## Timeline Without Preload
+  /// ## Example: Validation Only (No Formatting)
+  /// ```dart
+  /// void main() {
+  ///   // Don't load formats map (37% savings)
+  ///   LazyMetadataLoader.instance.initialize(enableFormats: false);
+  ///   
+  ///   final phone = PhoneNumber.parse('+14155552671');
+  ///   phone.isValid(type: PhoneNumberType.mobile); // Works
+  ///   phone.formatNsn(); // Throws (formats not loaded)
+  ///   
+  ///   // After warm-up, purge for 90-93% total savings
+  ///   LazyMetadataLoader.instance.purge();
+  /// }
+  /// ```
+  ///
+  /// ## Timeline Without initialize()
   /// - App launch: 0ms (lazy maps not loaded)
-  /// - First parse: 50-100ms (maps initialize)
+  /// - First parse: 50-100ms (maps initialize on demand)
   /// - Subsequent parses: <1ms
   ///
-  /// ## Timeline With Preload
+  /// ## Timeline With initialize()
   /// - App launch: 0ms (lazy maps not loaded)
-  /// - Enter phone screen: 50-100ms (preload during animation)
-  /// - First parse: <1ms (already loaded)
-  void preload() {
-    if (_preloaded) return; // Idempotent - skip if already called
-    _preloaded = true;
+  /// - Call initialize(): 50-100ms (one-time initialization)
+  /// - All parses: <1ms (already loaded)
+  void initialize({bool enableFormats = true}) {
+    if (_initialized) return; // Idempotent - skip if already called
+    _initialized = true;
+    _formatsEnabled = enableFormats;
     
     // Force lazy initialization by accessing each map
     metadataByIsoCode.isEmpty;
     metadataPatternsByIsoCode.isEmpty;
     metadataLenghtsByIsoCode.isEmpty;
-    if (_formatsEnabled) {
+    
+    // Only initialize formats if enabled
+    if (enableFormats) {
       metadataFormatsByIsoCode.isEmpty;
+    } else {
+      // Clear formats immediately if disabled
+      metadataFormatsByIsoCode.clear();
     }
   }
 
-  /// Configure which metadata types to keep in memory.
-  ///
-  /// Call this BEFORE any phone parsing to minimize memory footprint.
-  /// Disabled maps are immediately cleared to free memory.
-  ///
-  /// ## Parameters
-  /// - [enableFormats]: Whether to keep formatting metadata (default: true)
-  ///   Set to false if you only need parsing/validation without formatting
-  ///
-  /// ## Memory Savings
-  /// Disabling formats saves ~200KB (~37% of total metadata):
-  /// - With formats: ~540KB
-  /// - Without formats: ~340KB
-  ///
-  /// Combined with optimize(), you can achieve 90-93% total memory savings
-  /// for validation-only use cases.
-  ///
-  /// ## Example: Validation Only
-  /// ```dart
-  /// void main() {
-  ///   // Configure BEFORE any parsing
-  ///   LazyMetadataLoader.instance.configure(
-  ///     enableFormats: false,  // Don't need phone.formatNsn()
-  ///   );
-  ///
-  ///   // Use for parsing and validation only
-  ///   final phone = PhoneNumber.parse('+14155552671');
-  ///   phone.isValid(type: PhoneNumberType.mobile); // Works
-  ///   phone.formatNsn(); // Returns null (formats disabled)
-  ///
-  ///   // After warm-up, optimize
-  ///   LazyMetadataLoader.instance.optimize();
-  ///   // Result: ~91-93% memory savings.
-  /// }
-  /// ```
-  ///
-  /// ## When to Disable Formats
-  /// - You only normalize to E.164 format
-  /// - ou only validate phone numbers
-  /// - You display raw international format
-  /// - You use phone.formatNsn() or phone.formatInternational()
-  ///
-  /// ## Important
-  /// Must be called before any phone parsing. Calling after parsing has no effect
-  /// on already-loaded data.
-  void configure({
-    bool enableFormats = true,
-  }) {
-    if (_configured) return; // Only configure once
-    _configured = true;
-    _formatsEnabled = enableFormats;
-
-    // Immediately clear disabled maps
-    if (!enableFormats) {
-      metadataFormatsByIsoCode.clear();
-    }
+  @Deprecated('Use initialize(enableFormats: false) instead')
+  void configure({bool enableFormats = true}) {
+    initialize(enableFormats: enableFormats);
   }
 
   /// Get metadata for a specific ISO code
   PhoneMetadata? getMetadata(IsoCode isoCode) {
     _accessedCodes.add(isoCode);
 
-    if (_optimized) {
+    if (_purged) {
       return _metadataCache[isoCode];
     }
     return metadataByIsoCode[isoCode];
@@ -210,7 +226,7 @@ class LazyMetadataLoader {
   PhoneMetadataPatterns? getPatterns(IsoCode isoCode) {
     _accessedCodes.add(isoCode);
 
-    if (_optimized) {
+    if (_purged) {
       return _patternsCache[isoCode];
     }
     return metadataPatternsByIsoCode[isoCode];
@@ -220,7 +236,7 @@ class LazyMetadataLoader {
   PhoneMetadataLengths? getLengths(IsoCode isoCode) {
     _accessedCodes.add(isoCode);
 
-    if (_optimized) {
+    if (_purged) {
       return _lengthsCache[isoCode];
     }
     return metadataLenghtsByIsoCode[isoCode];
@@ -234,7 +250,7 @@ class LazyMetadataLoader {
 
     _accessedCodes.add(isoCode);
 
-    if (_optimized) {
+    if (_purged) {
       return _formatsCache[isoCode];
     }
 
@@ -255,7 +271,7 @@ class LazyMetadataLoader {
     return countryCodeToIsoCode[countryCode] ?? [];
   }
 
-  /// Optimize memory by purging unused countries.
+  /// Purge unused countries from memory to reduce footprint.
   ///
   /// This method:
   /// 1. Copies all countries accessed during warm-up to an internal cache
@@ -268,20 +284,20 @@ class LazyMetadataLoader {
   /// - Memory saved: ~87%
   ///
   /// ## Critical Warning
-  /// **After calling optimize(), new countries cannot be parsed!**
+  /// **After calling purge(), new countries cannot be parsed!**
   ///
-  /// Only countries accessed before optimize() remain available. Attempting
+  /// Only countries accessed before purge() remain available. Attempting
   /// to parse a new country will fail with "IsoCode not found" error.
   ///
   /// ## When It Resets
-  /// The optimization persists for the entire app session, even when the app
+  /// The purge persists for the entire app session, even when the app
   /// goes to background and returns. It only resets when:
   /// - User force-closes the app
   /// - OS kills the app (common after long background time)
   /// - App is restarted
   ///
   /// When the app restarts, all 245 countries are loaded again and you can
-  /// call optimize() with a new set of countries.
+  /// call purge() with a new set of countries.
   ///
   /// ## Best Practice
   /// ```dart
@@ -295,16 +311,16 @@ class LazyMetadataLoader {
   ///   } catch (_) {}
   /// }
   ///
-  /// // 3. Optimize to keep only those countries
-  /// LazyMetadataLoader.instance.optimize();
+  /// // 3. Purge to keep only those countries
+  /// LazyMetadataLoader.instance.purge();
   ///
   /// // 4. Continue using with reduced memory footprint
   /// ```
   ///
   /// ## Idempotent
-  /// Calling optimize() multiple times is safe - it only runs once.
-  void optimize() {
-    if (_optimized) return;
+  /// Calling purge() multiple times is safe - it only runs once.
+  void purge() {
+    if (_purged) return;
 
     // Copy accessed countries to cache
     for (var code in _accessedCodes) {
@@ -342,7 +358,12 @@ class LazyMetadataLoader {
     metadataFormatsByIsoCode
         .clear(); // Clear even if already cleared by configure()
 
-    _optimized = true;
+    _purged = true;
+  }
+
+  @Deprecated('Use purge() instead')
+  void optimize() {
+    purge();
   }
 
   /// Clear all cached metadata (useful for testing)
@@ -352,10 +373,9 @@ class LazyMetadataLoader {
     _lengthsCache.clear();
     _formatsCache.clear();
     _accessedCodes.clear();
-    _configured = false;
     _formatsEnabled = true;
-    _optimized = false;
-    _preloaded = false;
+    _purged = false;
+    _initialized = false;
   }
 
   /// Get cache statistics for monitoring
@@ -366,7 +386,7 @@ class LazyMetadataLoader {
       'lengths': _lengthsCache.length,
       'formats': _formatsCache.length,
       'accessed': _accessedCodes.length,
-      'optimized': _optimized,
+      'purged': _purged,
       'total': _metadataCache.length +
           _patternsCache.length +
           _lengthsCache.length +
