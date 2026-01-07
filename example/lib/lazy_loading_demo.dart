@@ -6,7 +6,7 @@ import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
 /// Strategy:
 /// 1. Initially all 245 countries loaded (~540KB)
 /// 2. During warm-up, track which countries are used
-/// 3. Call optimize() to purge unused countries
+/// 3. Call purge() to remove unused countries
 /// 4. Memory footprint reduced to only used countries
 void main() {
   print('=== Phone Numbers Parser - Warm-up & Purge Strategy ===\n');
@@ -38,7 +38,7 @@ void main() {
   // OPTIMIZE: Purge unused countries!
   print('Phase 2: OPTIMIZATION');
   print('  - Calling optimize()...');
-  loader.optimize();
+  loader.purge();
   print('  - Unused countries purged!');
   print('  - Original maps cleared');
   printStats(loader);

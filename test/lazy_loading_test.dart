@@ -10,7 +10,7 @@ void main() {
       // Before warm-up
       final initial = loader.getCacheStats();
       final initialAccessed = initial['accessed'] as int;
-      expect(initial['optimized'], equals(false));
+      expect(initial['purged'], equals(false));
 
       // Warm-up: parse some numbers
       PhoneNumber.parse('+14155552671'); // US
@@ -20,16 +20,16 @@ void main() {
       // After warm-up: tracked but not cached
       final afterWarmup = loader.getCacheStats();
       expect(afterWarmup['accessed'], greaterThan(initialAccessed));
-      expect(afterWarmup['optimized'], equals(false));
+      expect(afterWarmup['purged'], equals(false));
 
-      // Optimize: purge unused countries
-      loader.optimize();
+      // Purge: remove unused countries
+      loader.purge();
 
-      // After optimize: cached and optimized
-      final afterOptimize = loader.getCacheStats();
-      expect(afterOptimize['optimized'], equals(true));
-      expect(afterOptimize['total'], greaterThan(0));
-      expect(afterOptimize['total'], lessThan(200)); // Much less than 980
+      // After purge: cached and purged
+      final afterPurge = loader.getCacheStats();
+      expect(afterPurge['purged'], equals(true));
+      expect(afterPurge['total'], greaterThan(0));
+      expect(afterPurge['total'], lessThan(200)); // Much less than 980
 
       // Should still work after optimization
       final phone = PhoneNumber.parse('+13105551234'); // US number
@@ -41,8 +41,8 @@ void main() {
     });
   });
 
-  group('Backward Compatibility (no optimization)', () {
-    test('parsing still works without optimize', () {
+  group('Backward Compatibility (no purging)', () {
+    test('parsing still works without purge', () {
       final numbers = [
         '+14155552671',
         '+33612345678',
@@ -54,7 +54,7 @@ void main() {
       }
     });
 
-    test('validation still works without optimize', () {
+    test('validation still works without purge', () {
       final usPhone = PhoneNumber.parse('+14155552671');
       expect(usPhone.isValid(type: PhoneNumberType.mobile), isTrue);
 
@@ -64,13 +64,13 @@ void main() {
   });
 
   group('Selective Metadata Loading', () {
-    test('configure() disables formats immediately', () {
+    test('initialize(enableFormats: false) disables formats immediately', () {
       // Note: Must be run in isolation as clearCache can't restore original maps
       // This test assumes formats map hasn't been cleared yet
       final loader = LazyMetadataLoader.instance;
 
-      // Configure to disable formats
-      loader.configure(enableFormats: false);
+      // Initialize with formats disabled
+      loader.initialize(enableFormats: false);
 
       // Parse a number
       final phone = PhoneNumber.parse('+14155552671');
@@ -86,21 +86,21 @@ void main() {
       );
     });
 
-    test('selective loading with optimize saves more memory', () {
+    test('selective loading with purge saves more memory', () {
       final loader = LazyMetadataLoader.instance;
 
       // Warm up with some countries
       PhoneNumber.parse('+14155552671'); // US
       PhoneNumber.parse('+33612345678'); // FR
 
-      // Optimize
-      loader.optimize();
+      // Purge
+      loader.purge();
 
       final stats = loader.getCacheStats();
 
-      // Should have fewer entries since formats were disabled in previous test
+      // Should have cached data
       expect(stats['total'], greaterThan(0));
-      expect(stats['optimized'], isTrue);
+      expect(stats['purged'], isTrue);
     });
   });
 }
