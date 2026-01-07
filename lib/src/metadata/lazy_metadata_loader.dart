@@ -84,22 +84,34 @@ class LazyMetadataLoader {
   bool _formatsEnabled = true;
   bool _configured = false;
   bool _optimized = false;
+  bool _preloaded = false;
 
   /// Preload all metadata maps to avoid lazy initialization delay.
+  ///
+  /// This method is idempotent - safe to call multiple times from different
+  /// screens. Only the first call triggers initialization; subsequent calls
+  /// return immediately.
   ///
   /// Call this when entering a screen that will use phone parsing to avoid
   /// the ~50-100ms delay on first parse. The maps use `late final` so they
   /// won't be loaded until first access. This method triggers initialization
   /// early when convenient (e.g., during screen transition animation).
   ///
-  /// ## Example: Preload on Screen Navigation
+  /// ## Example: Preload on Multiple Screens
   /// ```dart
   /// class PhoneInputScreen extends StatefulWidget {
   ///   @override
   ///   void initState() {
   ///     super.initState();
-  ///     // Preload while screen is animating in
-  ///     LazyMetadataLoader.instance.preload();
+  ///     LazyMetadataLoader.instance.preload(); // First call loads
+  ///   }
+  /// }
+  ///
+  /// class ContactsScreen extends StatefulWidget {
+  ///   @override
+  ///   void initState() {
+  ///     super.initState();
+  ///     LazyMetadataLoader.instance.preload(); // Subsequent calls skip
   ///   }
   /// }
   /// ```
@@ -114,6 +126,9 @@ class LazyMetadataLoader {
   /// - Enter phone screen: 50-100ms (preload during animation)
   /// - First parse: <1ms (already loaded)
   void preload() {
+    if (_preloaded) return; // Idempotent - skip if already called
+    _preloaded = true;
+    
     // Force lazy initialization by accessing each map
     metadataByIsoCode.isEmpty;
     metadataPatternsByIsoCode.isEmpty;
@@ -340,6 +355,7 @@ class LazyMetadataLoader {
     _configured = false;
     _formatsEnabled = true;
     _optimized = false;
+    _preloaded = false;
   }
 
   /// Get cache statistics for monitoring
