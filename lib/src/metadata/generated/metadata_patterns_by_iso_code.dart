@@ -1,7 +1,7 @@
 import "../../iso_codes/iso_code.dart";
 import "../models/phone_metadata_patterns.dart";
 
-final Map<IsoCode, PhoneMetadataPatterns> metadataPatternsByIsoCode = {
+late final Map<IsoCode, PhoneMetadataPatterns> metadataPatternsByIsoCode = {
   IsoCode.AC: PhoneMetadataPatterns(
     nationalPrefixForParsing: null,
     nationalPrefixTransformRule: null,

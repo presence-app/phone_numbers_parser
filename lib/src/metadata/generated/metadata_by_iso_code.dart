@@ -1,7 +1,7 @@
 import "../../iso_codes/iso_code.dart";
 import "../models/phone_metadata.dart";
 
-final Map<IsoCode, PhoneMetadata> metadataByIsoCode = {
+late final Map<IsoCode, PhoneMetadata> metadataByIsoCode = {
   IsoCode.AC: PhoneMetadata(
     countryCode: r"247",
     isoCode: IsoCode.AC,
