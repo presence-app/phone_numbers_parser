@@ -85,6 +85,44 @@ class LazyMetadataLoader {
   bool _configured = false;
   bool _optimized = false;
 
+  /// Preload all metadata maps to avoid lazy initialization delay.
+  ///
+  /// Call this when entering a screen that will use phone parsing to avoid
+  /// the ~50-100ms delay on first parse. The maps use `late final` so they
+  /// won't be loaded until first access. This method triggers initialization
+  /// early when convenient (e.g., during screen transition animation).
+  ///
+  /// ## Example: Preload on Screen Navigation
+  /// ```dart
+  /// class PhoneInputScreen extends StatefulWidget {
+  ///   @override
+  ///   void initState() {
+  ///     super.initState();
+  ///     // Preload while screen is animating in
+  ///     LazyMetadataLoader.instance.preload();
+  ///   }
+  /// }
+  /// ```
+  ///
+  /// ## Timeline Without Preload
+  /// - App launch: 0ms (lazy maps not loaded)
+  /// - First parse: 50-100ms (maps initialize)
+  /// - Subsequent parses: <1ms
+  ///
+  /// ## Timeline With Preload
+  /// - App launch: 0ms (lazy maps not loaded)
+  /// - Enter phone screen: 50-100ms (preload during animation)
+  /// - First parse: <1ms (already loaded)
+  void preload() {
+    // Force lazy initialization by accessing each map
+    metadataByIsoCode.isEmpty;
+    metadataPatternsByIsoCode.isEmpty;
+    metadataLenghtsByIsoCode.isEmpty;
+    if (_formatsEnabled) {
+      metadataFormatsByIsoCode.isEmpty;
+    }
+  }
+
   /// Configure which metadata types to keep in memory.
   ///
   /// Call this BEFORE any phone parsing to minimize memory footprint.
@@ -117,7 +155,7 @@ class LazyMetadataLoader {
   ///
   ///   // After warm-up, optimize
   ///   LazyMetadataLoader.instance.optimize();
-  ///   // Result: ~91-93% memory savings!
+  ///   // Result: ~91-93% memory savings.
   /// }
   /// ```
   ///
