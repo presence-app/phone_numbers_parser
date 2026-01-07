@@ -11,7 +11,7 @@ import 'models/phone_metadata_patterns.dart';
 
 /// Lazy loader for phone metadata with optional initialization and memory optimization.
 ///
-/// ## Basic Usage  
+/// ## Basic Usage
 /// By default, metadata loads automatically on first parse (~50-100ms one-time delay).
 /// Call [initialize()] beforehand to control when this happens (idempotent, safe to call multiple times).
 ///
