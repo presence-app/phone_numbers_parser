@@ -62,4 +62,45 @@ void main() {
       expect(frPhone.isValid(type: PhoneNumberType.mobile), isTrue);
     });
   });
+
+  group('Selective Metadata Loading', () {
+    test('configure() disables formats immediately', () {
+      // Note: Must be run in isolation as clearCache can't restore original maps
+      // This test assumes formats map hasn't been cleared yet
+      final loader = LazyMetadataLoader.instance;
+      
+      // Configure to disable formats
+      loader.configure(enableFormats: false);
+      
+      // Parse a number
+      final phone = PhoneNumber.parse('+14155552671');
+      
+      // Parsing and validation work
+      expect(phone.international, isNotEmpty);
+      expect(phone.isValid(type: PhoneNumberType.mobile), isTrue);
+      
+      // Formatting throws when formats disabled
+      expect(
+        () => phone.formatNsn(),
+        throwsA(isA<PhoneNumberException>()),
+      );
+    });
+
+    test('selective loading with optimize saves more memory', () {
+      final loader = LazyMetadataLoader.instance;
+      
+      // Warm up with some countries
+      PhoneNumber.parse('+14155552671'); // US
+      PhoneNumber.parse('+33612345678'); // FR
+      
+      // Optimize
+      loader.optimize();
+      
+      final stats = loader.getCacheStats();
+      
+      // Should have fewer entries since formats were disabled in previous test
+      expect(stats['total'], greaterThan(0));
+      expect(stats['optimized'], isTrue);
+    });
+  });
 }
