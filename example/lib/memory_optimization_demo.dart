@@ -72,5 +72,5 @@ void printStats(MetadataMemoryManager loader) {
   final stats = loader.getCacheStats();
   print('  Accessed countries: ${stats["accessed"]}');
   print('  Cached entries: ${stats["total"]}');
-  print('  Optimized: ${stats["optimized"]}');
+  print('  Purged: ${stats["purged"]}');
 }

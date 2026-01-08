@@ -115,3 +115,42 @@ final another = one + 2;
 print('$another == $three');
 ```
 
+## Memory Optimization
+
+By default, the library loads metadata for all 245 countries (~540KB). For apps that only need specific countries, you can reduce memory usage by up to 90%.
+
+### Disable Formatting (37% savings)
+
+If you only need parsing/validation without formatting:
+
+```dart
+PhoneNumber.initialize(enableFormats: false);
+// Saves ~200KB - formatting will throw an exception
+```
+
+### Purge Unused Countries (87% savings)
+
+Parse the countries you need, then purge the rest:
+
+```dart
+// Parse numbers from countries you need
+PhoneNumber.parse('+14155552671'); // US
+PhoneNumber.parse('+33612345678'); // FR
+
+// Remove all other countries
+MetadataMemoryManager.instance.purge();
+// Keeps only US & FR (~65KB instead of ~540KB)
+```
+
+### Combined Optimization (90-93% savings)
+
+```dart
+// Disable formats and purge unused countries
+PhoneNumber.initialize(enableFormats: false);
+// ... parse your countries ...
+MetadataMemoryManager.instance.purge();
+// Result: ~50KB instead of ~540KB
+```
+
+For detailed information, see [MEMORY_OPTIMIZATION.md](MEMORY_OPTIMIZATION.md)
+

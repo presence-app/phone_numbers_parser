@@ -14,7 +14,7 @@ The plugin uses a three-phase approach:
 - The loader tracks which countries you access
 
 ### Phase 2: Optimize (Purge Unused)
-- Call `LazyMetadataLoader.instance.optimize()`
+- Call `MetadataMemoryManager.instance.purge()`
 - Accessed countries are cached
 - Original maps are cleared to free memory
 - Memory usage drops to ~65KB (for typical 30 countries)
@@ -32,7 +32,7 @@ Perfect for apps that only work with specific regions:
 
 ```dart
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
+import 'package:phone_numbers_parser/src/metadata/metadata_manager.dart';
 
 void setupPhoneParser() {
   // Warm-up: Parse numbers from countries you'll use
@@ -41,7 +41,7 @@ void setupPhoneParser() {
   PhoneNumber.parse('+441234567890'); // United Kingdom
   
   // Optimize: Purge unused countries
-  LazyMetadataLoader.instance.optimize();
+  MetadataMemoryManager.instance.purge();
   
   // Result: Only US, FR, GB remain (~87% memory saved)
 }
@@ -62,7 +62,7 @@ For apps that need to handle any country:
 
 ```dart
 void usePhoneParser() {
-  // Don't call optimize() - keep all countries
+  // Don't call purge() - keep all countries
   
   // Parse any country at any time:
   PhoneNumber.parse('+14155552671');  // US - works
@@ -78,7 +78,7 @@ void usePhoneParser() {
 
 Typical savings with 30 countries accessed:
 
-| Metric | Before optimize() | After optimize() | Savings |
+| Metric | Before purge() | After purge() | Savings |
 |--------|------------------|------------------|---------|
 | Countries | 245 | 30 | 87.8% |
 | Metadata entries | 980 | 120 | 87.8% |
@@ -89,13 +89,13 @@ Typical savings with 30 countries accessed:
 ### Background/Foreground
 The optimization **persists** through normal background/foreground cycles:
 ```
-User opens app → optimize() → backgrounds app → returns → still optimized ✓
+User opens app → purge() → backgrounds app → returns → still optimized ✓
 ```
 
 ### App Restart
 The optimization **resets** when the app fully restarts:
 ```
-User opens app → optimize() → force closes → reopens → all countries loaded ✓
+User opens app → purge() → force closes → reopens → all countries loaded ✓
 ```
 
 This is beneficial because:
@@ -137,7 +137,7 @@ void initializePhoneParser() async {
   warmUpMetadata(countries);
   
   // Optimize after warm-up
-  LazyMetadataLoader.instance.optimize();
+  MetadataMemoryManager.instance.purge();
   
   print('Phone parser ready with ${countries.length} countries');
 }
@@ -146,11 +146,11 @@ void initializePhoneParser() async {
 ### 4. Monitor Cache Statistics
 ```dart
 void checkMemoryUsage() {
-  final stats = LazyMetadataLoader.instance.getCacheStats();
+  final stats = MetadataMemoryManager.instance.getCacheStats();
   
   print('Accessed countries: ${stats["accessed"]}');
   print('Cached entries: ${stats["total"]}');
-  print('Optimized: ${stats["optimized"]}');
+  print('Purged: ${stats["purged"]}');
   
   final savings = ((245 - stats["accessed"]) / 245 * 100).toStringAsFixed(1);
   print('Memory savings: ~$savings%');
@@ -173,7 +173,7 @@ void checkMemoryUsage() {
 
 ## Trade-offs
 
-| Aspect | With optimize() | Without optimize() |
+| Aspect | With purge() | Without purge() |
 |--------|----------------|-------------------|
 | Memory | ~65KB (87% savings) | ~540KB (full) |
 | Flexibility | Limited to warm-up countries | All 245 countries |
@@ -203,10 +203,10 @@ class PhoneParserService {
     }
     
     // Optimize to keep only these regions
-    LazyMetadataLoader.instance.optimize();
+    MetadataMemoryManager.instance.purge();
     
     // Log results
-    final stats = LazyMetadataLoader.instance.getCacheStats();
+    final stats = MetadataMemoryManager.instance.getCacheStats();
     print('✅ Phone parser initialized with ${stats["accessed"]} countries');
   }
 }
@@ -228,7 +228,7 @@ The demo file shows both patterns:
 
 ```bash
 # Run the demo to see memory savings
-dart run example/lib/lazy_loading_demo.dart
+dart run example/lib/memory_optimization_demo.dart
 
 # Run tests (includes both optimized and non-optimized patterns)
 dart test
@@ -239,13 +239,13 @@ dart test
 ```dart
 class MemoryMonitor {
   static void logPhoneParserMemory() {
-    final stats = LazyMetadataLoader.instance.getCacheStats();
+    final stats = MetadataMemoryManager.instance.getCacheStats();
     
     // Log to analytics
     Analytics.log('phone_parser_memory', {
       'accessed_countries': stats['accessed'],
       'cached_entries': stats['total'],
-      'is_optimized': stats['optimized'],
+      'is_purged': stats['purged'],
       'memory_saved_percent': ((245 - stats['accessed']) / 245 * 100).round(),
     });
   }
@@ -254,10 +254,10 @@ class MemoryMonitor {
 
 ## FAQ
 
-**Q: Can I reload countries after optimize()?**  
-A: No, once optimized, only warm-up countries remain. The app must be fully restarted to reload all countries.
+**Q: Can I reload countries after purge()?**  
+A: No, once purged, only warm-up countries remain. The app must be fully restarted to reload all countries.
 
-**Q: What happens if I try to parse a new country after optimize()?**  
+**Q: What happens if I try to parse a new country after purge()?**  
 A: The parsing will fail with "IsoCode not found" error.
 
 **Q: Does optimization persist through background/foreground?**  
@@ -266,7 +266,7 @@ A: Yes, it persists for the entire app session. Only a full app restart resets i
 **Q: When does the app naturally reset to full data?**  
 A: When the OS kills the app (common after long background periods) or when the user force-closes and reopens the app.
 
-**Q: Can I call optimize() multiple times?**  
+**Q: Can I call purge() multiple times?**  
 A: Yes, but it only has effect the first time. Subsequent calls are ignored.
 
 **Q: How do I know which countries to warm up?**  
