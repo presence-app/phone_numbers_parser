@@ -1,6 +1,10 @@
 import "../../iso_codes/iso_code.dart";
 import "../models/phone_metadata.dart";
 
+// Note: 'late' is REQUIRED for lazy loading. Without it, this ~200KB map would be
+// initialized immediately at startup. With 'late final', initialization is deferred
+// until first access, which is the core of our memory optimization strategy.
+// ignore: unnecessary_late
 late final Map<IsoCode, PhoneMetadata> metadataByIsoCode = {
   IsoCode.AC: PhoneMetadata(
     countryCode: r"247",

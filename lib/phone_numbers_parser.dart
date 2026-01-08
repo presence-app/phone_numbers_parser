@@ -8,7 +8,6 @@ export 'src/phone_number.dart';
 export 'src/validation/phone_number_type.dart';
 export 'src/parsers/phone_number_exceptions.dart';
 export 'src/iso_codes/iso_code.dart';
-export 'src/metadata/lazy_metadata_loader.dart';
 
 // to remove next major:
 export 'src/range/phone_number_range.dart';

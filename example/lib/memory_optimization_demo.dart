@@ -1,5 +1,5 @@
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
+import 'package:phone_numbers_parser/src/metadata/metadata_manager.dart';
 
 /// Demonstrates the memory efficiency of warm-up and purge strategy
 ///
@@ -11,7 +11,7 @@ import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
 void main() {
   print('=== Phone Numbers Parser - Warm-up & Purge Strategy ===\n');
 
-  final loader = LazyMetadataLoader.instance;
+  final loader = MetadataMemoryManager.instance;
 
   print('Phase 1: WARM-UP (all metadata loaded)');
   print('  - All 245 countries available: ~540KB in memory');
@@ -68,7 +68,7 @@ void main() {
   print('Warm-up & purge strategy successfully reduces memory');
 }
 
-void printStats(LazyMetadataLoader loader) {
+void printStats(MetadataMemoryManager loader) {
   final stats = loader.getCacheStats();
   print('  Accessed countries: ${stats["accessed"]}');
   print('  Cached entries: ${stats["total"]}');

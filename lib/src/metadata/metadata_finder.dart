@@ -1,19 +1,19 @@
 import '../validation/validator.dart';
-import 'lazy_metadata_loader.dart';
 import 'models/phone_metadata.dart';
 import 'models/phone_metadata_formats.dart';
 import 'models/phone_metadata_lengths.dart';
 import 'models/phone_metadata_patterns.dart';
 import '../iso_codes/iso_code.dart';
 import '../parsers/phone_number_exceptions.dart';
+import 'metadata_manager.dart';
 
-/// Helper to find metadata using lazy loading for memory efficiency
+/// Helper to find metadata for phone number parsing and validation.
 abstract class MetadataFinder {
-  static final _loader = LazyMetadataLoader.instance;
+  static final _manager = getMetadataManager();
 
-  /// expects a normalized iso code
+  /// Find metadata for a specific ISO code
   static PhoneMetadata findMetadataForIsoCode(IsoCode isoCode) {
-    final metadata = _loader.getMetadata(isoCode);
+    final metadata = _manager.getMetadata(isoCode);
     if (metadata == null) {
       throw PhoneNumberException(
         code: Code.invalidIsoCode,
@@ -23,9 +23,9 @@ abstract class MetadataFinder {
     return metadata;
   }
 
-  /// expects a normalized iso code
+  /// Find pattern metadata for a specific ISO code
   static PhoneMetadataPatterns findMetadataPatternsForIsoCode(IsoCode isoCode) {
-    final metadata = _loader.getPatterns(isoCode);
+    final metadata = _manager.getPatterns(isoCode);
     if (metadata == null) {
       throw PhoneNumberException(
         code: Code.invalidIsoCode,
@@ -35,8 +35,9 @@ abstract class MetadataFinder {
     return metadata;
   }
 
+  /// Find length metadata for a specific ISO code
   static PhoneMetadataLengths findMetadataLengthForIsoCode(IsoCode isoCode) {
-    final metadata = _loader.getLengths(isoCode);
+    final metadata = _manager.getLengths(isoCode);
     if (metadata == null) {
       throw PhoneNumberException(
         code: Code.invalidIsoCode,
@@ -46,8 +47,9 @@ abstract class MetadataFinder {
     return metadata;
   }
 
+  /// Find format metadata for a specific ISO code
   static PhoneMetadataFormats findMetadataFormatsForIsoCode(IsoCode isoCode) {
-    final metadata = _loader.getFormats(isoCode);
+    final metadata = _manager.getFormats(isoCode);
     if (metadata == null) {
       throw PhoneNumberException(
         code: Code.invalidIsoCode,
@@ -57,12 +59,12 @@ abstract class MetadataFinder {
     return metadata;
   }
 
-  /// expects normalized countryCode
+  /// Find metadata for a country code with pattern matching
   static PhoneMetadata? findMetadataForCountryCode(
     String countryCode,
     String nationalNumber,
   ) {
-    final isoList = _getIsoCodesFromCountryCode(countryCode);
+    final isoList = _manager.getIsoCodesFromCountryCode(countryCode);
 
     if (isoList.isEmpty) {
       return null;
@@ -74,10 +76,6 @@ abstract class MetadataFinder {
 
     final match = _getMatchUsingPatterns(nationalNumber, allMatchingMetadata);
     return match;
-  }
-
-  static List<IsoCode> _getIsoCodesFromCountryCode(String countryCode) {
-    return _loader.getIsoCodesFromCountryCode(countryCode);
   }
 
   static PhoneMetadata _getMatchUsingPatterns(
