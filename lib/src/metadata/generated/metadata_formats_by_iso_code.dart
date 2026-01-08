@@ -1,7 +1,12 @@
 import "../../iso_codes/iso_code.dart";
 import "../models/phone_metadata_formats.dart";
 
-late final Map<IsoCode, PhoneMetadataFormatDefinition> metadataFormatsByIsoCode = {
+// Note: 'late' is REQUIRED for lazy loading. Without it, this ~200KB map would be
+// initialized immediately at startup. With 'late final', initialization is deferred
+// until first access, which is the core of our memory optimization strategy.
+// ignore: unnecessary_late
+late final Map<IsoCode, PhoneMetadataFormatDefinition>
+    metadataFormatsByIsoCode = {
   IsoCode.AC: PhoneMetadataFormatListDefinition(
     formats: [],
   ),

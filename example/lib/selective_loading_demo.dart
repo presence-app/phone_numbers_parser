@@ -1,5 +1,5 @@
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
+import 'package:phone_numbers_parser/src/metadata/metadata_manager.dart';
 
 /// Demonstrates selective metadata loading for validation-only use cases
 ///
@@ -10,7 +10,7 @@ void main() {
 
   // INITIALIZE WITH FORMATS DISABLED
   print('Step 1: Initialize (disable formatting metadata)');
-  LazyMetadataLoader.instance.initialize(
+  PhoneNumber.initialize(
     enableFormats: false, // We don't need phone.formatNsn()
   );
   print('  ✓ Formats map cleared (~200KB saved immediately)');
@@ -44,7 +44,7 @@ void main() {
   }
   print('    ✓ Formats disabled as expected\n');
 
-  final afterWarmup = LazyMetadataLoader.instance.getCacheStats();
+  final afterWarmup = MetadataMemoryManager.instance.getCacheStats();
   print('After warm-up:');
   print('  Accessed countries: ${afterWarmup["accessed"]}');
   print('  Cached entries: ${afterWarmup["total"]}');
@@ -52,9 +52,9 @@ void main() {
 
   // PURGE: Remove unused countries
   print('Step 3: Purge (remove unused countries)');
-  LazyMetadataLoader.instance.purge();
+  MetadataMemoryManager.instance.purge();
 
-  final afterPurge = LazyMetadataLoader.instance.getCacheStats();
+  final afterPurge = MetadataMemoryManager.instance.getCacheStats();
   print('  ✓ Purge complete');
   print('  Accessed countries: ${afterPurge["accessed"]}');
   print('  Cached entries: ${afterPurge["total"]}');

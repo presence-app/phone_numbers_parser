@@ -1,11 +1,11 @@
 import 'package:phone_numbers_parser/phone_numbers_parser.dart';
-import 'package:phone_numbers_parser/src/metadata/lazy_metadata_loader.dart';
+import 'package:phone_numbers_parser/src/metadata/metadata_manager.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('Warm-up and Purge Strategy', () {
     test('full lifecycle: warm-up, optimize, use', () {
-      final loader = LazyMetadataLoader.instance;
+      final loader = MetadataMemoryManager.instance;
 
       // Before warm-up
       final initial = loader.getCacheStats();
@@ -65,31 +65,32 @@ void main() {
 
   group('Idempotence Tests', () {
     test('initialize() is idempotent - multiple calls are safe', () {
-      final loader = LazyMetadataLoader.instance;
-
       // Measure first call
       final stopwatch1 = Stopwatch()..start();
-      loader.initialize(enableFormats: false);
+      PhoneNumber.initialize(enableFormats: false);
       stopwatch1.stop();
-      print('[Test] First initialize() took ${stopwatch1.elapsedMilliseconds}ms (${stopwatch1.elapsedMicroseconds}μs)');
+      print(
+          '[Test] First initialize() took ${stopwatch1.elapsedMilliseconds}ms (${stopwatch1.elapsedMicroseconds}μs)');
 
       // Measure subsequent calls (should be instant)
       final stopwatch2 = Stopwatch()..start();
-      loader.initialize(enableFormats: false);
+      PhoneNumber.initialize(enableFormats: false);
       stopwatch2.stop();
-      print('[Test] Second initialize() took ${stopwatch2.elapsedMicroseconds}μs (idempotent, should be ~0μs)');
+      print(
+          '[Test] Second initialize() took ${stopwatch2.elapsedMicroseconds}μs (idempotent, should be ~0μs)');
 
       final stopwatch3 = Stopwatch()..start();
-      loader.initialize(enableFormats: false);
+      PhoneNumber.initialize(enableFormats: false);
       stopwatch3.stop();
-      print('[Test] Third initialize() took ${stopwatch3.elapsedMicroseconds}μs (idempotent, should be ~0μs)');
+      print(
+          '[Test] Third initialize() took ${stopwatch3.elapsedMicroseconds}μs (idempotent, should be ~0μs)');
 
       // Should work normally
       final phone1 = PhoneNumber.parse('+14155552671');
       expect(phone1.isValid(type: PhoneNumberType.mobile), isTrue);
 
       // Call again before another parse (simulating multiple function calls)
-      loader.initialize(enableFormats: false);
+      PhoneNumber.initialize(enableFormats: false);
       final phone2 = PhoneNumber.parse('+33612345678');
       expect(phone2.isValid(type: PhoneNumberType.mobile), isTrue);
 
@@ -102,12 +103,10 @@ void main() {
 
     test('initialize() called from multiple functions (real-world pattern)',
         () {
-      final loader = LazyMetadataLoader.instance;
-
       // Simulate your normalizePhoneNumberToE164 function
       String normalizePhoneNumber(String phoneNumber) {
         final sw = Stopwatch()..start();
-        loader.initialize(enableFormats: false); // Called every time
+        PhoneNumber.initialize(enableFormats: false); // Called every time
         sw.stop();
         print(
             '[Test] normalizePhoneNumber() - initialize() took ${sw.elapsedMicroseconds}μs');
@@ -120,7 +119,7 @@ void main() {
       // Simulate your isValidMobilePhoneNumber function
       bool isValidMobile(String phoneNumber, {required String countryCode}) {
         final sw = Stopwatch()..start();
-        loader.initialize(enableFormats: false); // Called every time
+        PhoneNumber.initialize(enableFormats: false); // Called every time
         sw.stop();
         print(
             '[Test] isValidMobilePhoneNumber() - initialize() took ${sw.elapsedMicroseconds}μs');
@@ -153,14 +152,12 @@ void main() {
     });
 
     test('initialize() with different parameters respects first call', () {
-      final loader = LazyMetadataLoader.instance;
-
       // First call disables formats
-      loader.initialize(enableFormats: false);
+      PhoneNumber.initialize(enableFormats: false);
 
       // Subsequent calls with different parameters are ignored (idempotent)
-      loader.initialize(enableFormats: true);
-      loader.initialize(enableFormats: true);
+      PhoneNumber.initialize(enableFormats: true);
+      PhoneNumber.initialize(enableFormats: true);
 
       final phone = PhoneNumber.parse('+14155552671');
 
@@ -176,10 +173,9 @@ void main() {
     test('initialize(enableFormats: false) disables formats immediately', () {
       // Note: Must be run in isolation as clearCache can't restore original maps
       // This test assumes formats map hasn't been cleared yet
-      final loader = LazyMetadataLoader.instance;
 
       // Initialize with formats disabled
-      loader.initialize(enableFormats: false);
+      PhoneNumber.initialize(enableFormats: false);
 
       // Parse a number
       final phone = PhoneNumber.parse('+14155552671');
@@ -196,7 +192,7 @@ void main() {
     });
 
     test('selective loading with purge saves more memory', () {
-      final loader = LazyMetadataLoader.instance;
+      final loader = MetadataMemoryManager.instance;
 
       // Warm up with some countries
       PhoneNumber.parse('+14155552671'); // US
